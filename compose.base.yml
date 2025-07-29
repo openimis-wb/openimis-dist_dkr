@@ -56,13 +56,17 @@ services:
     <<: *default-api
     command: start
     restart: always
+    networks:
+      openimis-net:
     depends_on:
       migrations:
-        condition: service_completed_successfully   
+        condition: service_completed_successfully
   worker:
     <<: *default-api
     command: worker
     restart: always
+    networks:
+      openimis-net:
     depends_on:
       migrations:
         condition: service_completed_successfully
