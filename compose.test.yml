@@ -1,0 +1,70 @@
+services:
+  grievance-seed:
+    image: ghcr.io/openimis/openimis-be:${BE_TAG:-develop}
+    environment:
+      - DB_DEFAULT=${DB_DEFAULT:-postgresql}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - SECRET_KEY=${SECRET_KEY}
+      - SITE_ROOT=api
+      - MODE=${MODE:-Prod}
+      - CACHE_BACKEND=${CACHE_BACKEND}
+      - CACHE_URL=${CACHE_URL}
+      - CACHE_OPTIONS=${CACHE_OPTIONS}
+      - OPENSEARCH_ADMIN=${OPENSEARCH_ADMIN}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
+      - OPENSEARCH_HOSTS=${OPENSEARCH_HOSTS}
+    entrypoint: [""]
+    working_dir: /openimis-be/openIMIS
+    command:
+      - sh
+      - -ec
+      - |
+        python manage.py shell -c "
+        import sys, json
+        # Seed module configs BEFORE backend boots, so each app's ready() picks them up.
+        # These are boot-time class-attribute configs (apps.ready -> get_or_default), so
+        # seeding the DB row pre-boot is equivalent to (and CSRF-free vs.) the Django-admin
+        # route. Disables maker-checker for individual/social_protection upload+enrollment.
+        SEEDS = [
+            ('grievance_social_protection', '/seed/grievance-config.json'),
+            ('individual', '/seed/individual-config-minimal.json'),
+            ('social_protection', '/seed/social-protection-config.json'),
+        ]
+        try:
+            from core.models import ModuleConfiguration
+            for module, path in SEEDS:
+                cfg = open(path).read()
+                json.loads(cfg)
+                obj, created = ModuleConfiguration.objects.update_or_create(
+                    module=module, layer='be',
+                    defaults={'config': cfg, 'version': '1'})
+                print('config', module, 'created' if created else 'updated', obj.id)
+        except Exception as e:
+            sys.stderr.write('SEED FAILED: %r\n' % e)
+            sys.exit(1)
+        "
+    volumes:
+      - ./cypress/fixtures/grievance-config.json:/seed/grievance-config.json:ro
+      - ./cypress/fixtures/individual-config-minimal.json:/seed/individual-config-minimal.json:ro
+      - ./cypress/fixtures/social-protection-config.json:/seed/social-protection-config.json:ro
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    networks:
+      openimis-net:
+    restart: "no"
+
+  backend:
+    # Re-declare the full set: depends_on override semantics vary by Compose version, and we
+    # must not drop the base's redis-healthy / migrations gates while adding grievance-seed.
+    depends_on:
+      grievance-seed:
+        condition: service_completed_successfully
+      migrations:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy

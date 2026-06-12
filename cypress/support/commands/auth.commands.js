@@ -42,7 +42,9 @@ export function registerAuthCommands() {
   });
 
   Cypress.Commands.add('logout', () => {
-    cy.visit('/front');
+    // Trailing slash: bare '/front' 301-redirects to a port-stripped 'http://localhost/front/',
+    // which fails when the stack is served on a non-80 HTTP_PORT (e.g. 8088).
+    cy.visit('/front/');
 
     // Wait until the SPA has settled: either the logout button is in the navbar
     // (logged in) or the login form is visible (already logged out).
@@ -83,5 +85,29 @@ export function registerAuthCommands() {
         cy.contains('button, a', 'Log out').click();
       }
     });
+  });
+
+  // Log in through the UI as an arbitrary (non-admin) user — parameterized cy.login().
+  Cypress.Commands.add('loginAs', (username, password) => {
+    cy.clearCookies();
+    cy.clearLocalStorage();
+    cy.visit('/front/login');
+    cy.get('input[type="text"]', { timeout: 15000 }).first().clear({ force: true }).type(username, { force: true });
+    cy.get('input[type="password"]', { timeout: 15000 }).first().clear({ force: true }).type(password, { force: true });
+    cy.get('button[type="submit"]').click({ force: true });
+    cy.url({ timeout: 15000 }).should('not.include', '/front/login');
+
+    // After login the app may raise an async "Session Expired" MUI dialog (401 on
+    // current_user) that overlays the page. Dismiss it (click the dialog's OK), otherwise
+    // it covers the authenticated UI.
+    cy.get('body').then(($b) => {
+      const btns = $b.find('.MuiDialogActions-root button');
+      if (btns.length) cy.wrap(btns.last()).click({ force: true });
+    });
+
+    // URL alone is not enough: a failed/anonymous login can also leave /front/login.
+    // Assert an authenticated page actually rendered (Log out button is user-agnostic,
+    // unlike the Admin-specific "Welcome Admin Admin!" greeting cy.login() uses).
+    cy.get('button[title="Log out"]', { timeout: 15000 }).should('be.visible');
   });
 }

@@ -1,0 +1,31 @@
+{
+  "default_grievance_type": "uncategorized",
+  "resolution_times": "5,0",
+  "grievance_flags": [
+    "public",
+    { "name": "sensitive", "priority": "Critical", "permissions": ["restricted_read", "read", "create"] }
+  ],
+  "grievance_types": [
+    "feedback",
+    {
+      "name": "complaint",
+      "priority": "High",
+      "permissions": ["restricted_read", "read", "create", "update"],
+      "resolution_times": "3,0",
+      "children": [
+        {
+          "name": "vbg_complaint",
+          "permissions": ["restricted_read", "read", "create"],
+          "visible_fields": ["id", "status", "category"],
+          "resolution_times": "1,0"
+        },
+        { "name": "general_complaint" }
+      ]
+    },
+    {
+      "name": "enrollment",
+      "permissions": ["read", "create"],
+      "children": [ { "name": "missing_documents" } ]
+    }
+  ]
+}

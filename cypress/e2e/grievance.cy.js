@@ -11,8 +11,8 @@ describe('Grievance module workflows', () => {
     it('Creates an anonymous grievance (None reporter type)', function () {
       const grievanceData = {
         title: `E2E Anonymous Grievance ${timestamp}`,
-        category: 'Category A',
-        flag: 'Flag A',
+        category: ['complaint'],
+        flag: 'public',
         channel: 'Channel A',
         priority: 'High',
         details: 'This is a test grievance with no reporter information.',
@@ -22,16 +22,16 @@ describe('Grievance module workflows', () => {
       cy.createGrievance(grievanceData);
 
       cy.visit('/front/ticket/tickets');
-      cy.checkGrievanceFieldValuesInListView(grievanceData.title, grievanceData.category);
+      cy.checkGrievanceFieldValuesInListView(grievanceData.title, grievanceData.category.join(' > '));
     });
 
     it('Creates a grievance with Individual reporter type', function () {
-      cy.ensureSufficientStandaloneIndividuals(10);
+      cy.ensureSufficientIndividuals(10);
 
       const grievanceData = {
         title: `E2E Individual Reporter Grievance ${timestamp}`,
-        category: 'Category B',
-        flag: 'Flag B',
+        category: ['feedback'],
+        flag: 'sensitive',
         channel: 'Channel B',
         priority: 'Normal',
         details: 'This grievance is reported by an individual from the registry.',
@@ -41,7 +41,7 @@ describe('Grievance module workflows', () => {
       cy.createGrievance(grievanceData);
 
       cy.visit('/front/ticket/tickets');
-      cy.checkGrievanceFieldValuesInListView(grievanceData.title, grievanceData.category);
+      cy.checkGrievanceFieldValuesInListView(grievanceData.title, grievanceData.category.join(' > '));
     });
 
     describe('with Beneficiary reporter type', () => {
@@ -49,13 +49,10 @@ describe('Grievance module workflows', () => {
       const programCode = `GRB${uniqueId}`;
       const programName = `E2E Grievance Beneficiary Program ${uniqueId}`;
 
-      before(() => {
-        // Disable maker checker
-        cy.loginAdminInterface()
-        cy.setModuleConfig('social_protection', 'social-protection-config.json')
-        cy.setModuleConfig('individual', 'individual-config-minimal.json')
-        cy.logoutAdminInterface()
-      })
+      // Maker-checker for individual/social_protection is disabled via the pre-boot
+      // ModuleConfiguration seed in compose.test.yml. (Seeding the config rows before the
+      // backend boots is CSRF-free, unlike the Django-admin-over-HTTP route which fails
+      // under the prod stack's secure-cookie CSRF.)
 
       before(function () {
         cy.login();
@@ -97,8 +94,8 @@ describe('Grievance module workflows', () => {
       it('Creates a grievance with Beneficiary reporter type', function () {
         const grievanceData = {
           title: `E2E Beneficiary Reporter Grievance ${timestamp}`,
-          category: 'Category A',
-          flag: 'Flag A',
+          category: ['complaint'],
+          flag: 'public',
           channel: 'Channel A',
           details: 'This grievance is reported by a beneficiary.',
           reporterType: 'Beneficiary',
@@ -108,15 +105,15 @@ describe('Grievance module workflows', () => {
         cy.createGrievance(grievanceData);
 
         cy.visit('/front/ticket/tickets');
-        cy.checkGrievanceFieldValuesInListView(grievanceData.title, grievanceData.category);
+        cy.checkGrievanceFieldValuesInListView(grievanceData.title, grievanceData.category.join(' > '));
       });
     });
 
     it('Creates a grievance with Attending Staff reporter type', function () {
       const grievanceData = {
         title: `E2E Staff Reporter Grievance ${timestamp}`,
-        category: 'Category B',
-        flag: 'Flag B',
+        category: ['feedback'],
+        flag: 'sensitive',
         channel: 'Channel B',
         priority: 'Low',
         details: 'This grievance is reported by an attending staff member.',
@@ -126,7 +123,7 @@ describe('Grievance module workflows', () => {
       cy.createGrievance(grievanceData);
 
       cy.visit('/front/ticket/tickets');
-      cy.checkGrievanceFieldValuesInListView(grievanceData.title, grievanceData.category);
+      cy.checkGrievanceFieldValuesInListView(grievanceData.title, grievanceData.category.join(' > '));
     });
   });
 
@@ -136,12 +133,12 @@ describe('Grievance module workflows', () => {
 
     before(function () {
       cy.login();
-      cy.ensureSufficientStandaloneIndividuals(5);
+      cy.ensureSufficientIndividuals(5);
 
       const grievanceData = {
         title: `E2E Comment Test Grievance ${timestamp}`,
-        category: 'Category A',
-        flag: 'Flag A',
+        category: ['complaint'],
+        flag: 'public',
         channel: 'Channel A',
         details: 'Grievance for testing comments with reporter types.',
         reporterType: 'None',
@@ -236,24 +233,24 @@ describe('Grievance module workflows', () => {
       const grievances = [
         {
           title: `E2E Filter Test Critical ${timestamp}`,
-          category: 'Category A',
-          flag: 'Flag A',
+          category: ['complaint'],
+          flag: 'public',
           channel: 'Channel A',
           priority: 'Critical',
           reporterType: 'None',
         },
         {
           title: `E2E Filter Test Normal ${timestamp}`,
-          category: 'Category B',
-          flag: 'Flag B',
+          category: ['feedback'],
+          flag: 'sensitive',
           channel: 'Channel B',
           priority: 'Normal',
           reporterType: 'None',
         },
         {
           title: `E2E Filter Test Low ${timestamp}`,
-          category: 'Category A',
-          flag: 'Flag A',
+          category: ['complaint'],
+          flag: 'public',
           channel: 'Channel A',
           priority: 'Low',
           reporterType: 'None',
@@ -296,16 +293,16 @@ describe('Grievance module workflows', () => {
     });
 
     it('Filters grievances by category', function () {
-      cy.chooseMuiAutocomplete('Category', 'Category A');
+      cy.chooseGrievanceCategory(['complaint']);
       cy.wait(900); // wait for 800ms filter debounce before triggering search
       cy.contains('button', 'Search').click();
       cy.contains('tfoot', 'Rows Per Page').should('be.visible');
 
-      // The DropDownCategoryPicker passes an object to the filter; the backend receives
-      // a stringified object so results may not be narrowed by category.
-      // Verify that the Category A test grievances we created are present in the results.
+      // The two 'complaint' rows appear AND the 'feedback' (Normal) row is excluded —
+      // without the negative assertion a filter that returns all rows would pass.
       cy.contains('td', `E2E Filter Test Critical ${timestamp}`).should('exist');
       cy.contains('td', `E2E Filter Test Low ${timestamp}`).should('exist');
+      cy.contains('td', `E2E Filter Test Normal ${timestamp}`).should('not.exist');
     });
 
     it('Filters grievances by priority', function () {
@@ -349,11 +346,18 @@ describe('Grievance module workflows', () => {
     it('Clears all filters when Clear button is clicked', function () {
       cy.enterMuiInput('Title', 'Test Filter');
       cy.chooseMuiSelect('Priority', 'Critical');
-      cy.chooseMuiAutocomplete('Category', 'Category A');
+      cy.chooseGrievanceCategory(['complaint']);
 
       cy.contains('button', 'Reset filters').click();
 
       cy.contains('label', 'Title')
+        .siblings('.MuiInputBase-root')
+        .find('input')
+        .should('have.value', '');
+
+      // Reset must clear the rc-cascader Category too (it holds its own state), not just
+      // the Title/Priority inputs.
+      cy.contains('label', 'Category')
         .siblings('.MuiInputBase-root')
         .find('input')
         .should('have.value', '');
@@ -368,8 +372,8 @@ describe('Grievance module workflows', () => {
     const timestamp = getTimestamp();
     const grievanceData = {
       title: `E2E Update Test Grievance ${timestamp}`,
-      category: 'Category A',
-      flag: 'Flag A',
+      category: ['complaint'],
+      flag: 'public',
       channel: 'Channel A',
       priority: 'Normal',
       details: 'Initial grievance details for update testing.',
@@ -379,7 +383,7 @@ describe('Grievance module workflows', () => {
 
     before(function () {
       cy.login();
-      cy.ensureSufficientStandaloneIndividuals(10);
+      cy.ensureSufficientIndividuals(10);
       cy.createGrievance(grievanceData);
       cy.getGrievanceCodeFromList(grievanceData.title).then(code => {
         grievanceCode = code;
@@ -390,7 +394,7 @@ describe('Grievance module workflows', () => {
     it('Updates grievance title and category', function () {
       const updateData = {
         title: `E2E Updated Title ${timestamp}`,
-        category: 'Category B',
+        category: ['feedback'],
       };
 
       cy.updateGrievance(grievanceCode, updateData, {
@@ -398,7 +402,7 @@ describe('Grievance module workflows', () => {
       });
 
       cy.visit('/front/ticket/tickets');
-      cy.checkGrievanceFieldValuesInListView(updateData.title, updateData.category);
+      cy.checkGrievanceFieldValuesInListView(updateData.title, updateData.category.join(' > '));
     });
 
     it('Updates grievance priority and details', function () {
@@ -424,8 +428,8 @@ describe('Grievance module workflows', () => {
       cy.login();
       const grievanceData = {
         title: `E2E Status Workflow Grievance ${timestamp}`,
-        category: 'Category A',
-        flag: 'Flag A',
+        category: ['complaint'],
+        flag: 'public',
         channel: 'Channel A',
         details: 'Grievance for testing status workflow.',
         reporterType: 'None',
@@ -477,8 +481,8 @@ describe('Grievance module workflows', () => {
     let grievanceCode;
     const grievanceData = {
       title: `E2E Detail View Grievance ${timestamp}`,
-      category: 'Category B',
-      flag: 'Flag B',
+      category: ['feedback'],
+      flag: 'sensitive',
       channel: 'Channel B',
       priority: 'High',
       details: 'Detailed grievance for view verification.',
@@ -499,7 +503,7 @@ describe('Grievance module workflows', () => {
 
       cy.checkGrievanceFieldValues(
         grievanceData.title,
-        grievanceData.category,
+        grievanceData.category.join(' > '),
         grievanceData.flag,
         grievanceData.channel,
         grievanceData.priority
@@ -509,7 +513,7 @@ describe('Grievance module workflows', () => {
 
   describe('Grievance navigation and UI elements', () => {
     it('Navigates to grievance creation page from menu', function () {
-      cy.visit('/front');
+      cy.visit('/front/');
       cy.contains(':visible', /^Grievance$/).click();
       cy.contains('Add Grievance').click();
 
@@ -519,7 +523,7 @@ describe('Grievance module workflows', () => {
     });
 
     it('Navigates to grievance list page from menu', function () {
-      cy.visit('/front');
+      cy.visit('/front/');
       cy.contains(':visible', /^Grievance$/).click();
       cy.aliasGraphqlQuery('tickets(', 'grievanceListLoad');
       cy.contains('Grievances').click();

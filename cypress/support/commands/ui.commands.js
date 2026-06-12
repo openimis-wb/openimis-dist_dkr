@@ -262,7 +262,12 @@ export function registerUiCommands() {
       return;
     }
 
+    // When no value is given, click the first VISIBLE option. The grievance rc-cascader
+    // category picker leaves hidden `.rc-cascader-dropdown` remnants in the DOM that also
+    // match optionSelector; without `:visible`, `.first()` can grab a hidden remnant and the
+    // real (reporter) option never gets selected.
     cy.get(optionSelector)
+      .filter(':visible')
       .should('have.length.at.least', 1)
       .first()
       .click({ force: true });
